@@ -1,0 +1,10 @@
+# tested on python 3.13
+tensorflow>=2.16        # includes Keras 3
+numpy
+pandas
+opencv-python-headless
+pillow
+eventlet
+# the 2017 Udacity sim only talks the old socket.io protocol, newer versions won't connect
+python-socketio==4.6.1
+python-engineio==3.13.2

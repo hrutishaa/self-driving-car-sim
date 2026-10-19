@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Self Driving Car Simulator</title>
+  <meta name="description" content="Behavioral cloning in the browser. Drive a car, record camera images and steering, train an Nvidia style CNN with TensorFlow.js, then let it drive." />
+  <meta property="og:title" content="Self Driving Car Simulator" />
+  <meta property="og:description" content="Behavioral cloning in the browser with TensorFlow.js." />
+  <meta property="og:image" content="img/og.png" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='none' stroke='%2336d6c3' stroke-width='4'/><circle cx='16' cy='16' r='3' fill='%2336d6c3'/></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div>
+        <h1>Self Driving Car Simulator</h1>
+        <p>Behavioral cloning in the browser: camera image in, steering out</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="backendBadge" class="badge">loading TF.js</span>
+      <span id="modelBadge" class="badge">model: loading</span>
+      <button id="heroAuto" class="btn primary">Run autonomous</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <div class="dashcam-wrap" id="dashWrap">
+        <canvas id="dashcam" width="512" height="256" aria-label="Forward dashcam view"></canvas>
+        <div class="hud">
+          <div class="hud-left">
+            <span id="modePill" class="pill">MANUAL</span>
+            <span id="recPill" class="pill rec hidden">REC</span>
+          </div>
+          <div class="hud-right">
+            <div class="hud-stat"><b id="hudSpeed">0</b><small>km/h</small></div>
+            <div class="hud-stat"><b id="hudLap">0</b><small>laps</small></div>
+            <div class="hud-stat"><b id="hudTime">0.0</b><small>lap s</small></div>
+          </div>
+          <div class="steer-meter"><div class="steer-zero"></div><div id="steerNeedle" class="steer-needle"></div><span id="steerText">0.00</span></div>
+          <div id="toast" class="toast hidden"></div>
+        </div>
+        <div class="touch" id="touch">
+          <div class="touch-group">
+            <button data-key="left" aria-label="Steer left">◀</button>
+            <button data-key="right" aria-label="Steer right">▶</button>
+          </div>
+          <div class="touch-group">
+            <button data-key="down" aria-label="Brake">▼</button>
+            <button data-key="up" aria-label="Accelerate">▲</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="subviews">
+        <div class="card map-card">
+          <div class="card-title">Track <span class="muted" id="trackInfo"></span></div>
+          <canvas id="topview" width="600" height="420" aria-label="Top-down track map"></canvas>
+          <div class="legend"><span class="lg manual"></span>you <span class="lg expert"></span>expert <span class="lg auto"></span>network <span class="lg take"></span>takeover</div>
+        </div>
+        <div class="card net-card">
+          <div class="card-title">Network input</div>
+          <canvas id="rawcam" width="320" height="160" aria-label="Raw camera with crop"></canvas>
+          <div class="caption">raw 160x320 camera, <span class="sky">sky</span> and <span class="hood">hood</span> get cropped</div>
+          <canvas id="netin" width="200" height="66" aria-label="Network input 66x200"></canvas>
+          <div class="caption">66x200x3 = 39,600 numbers in, one steering value out</div>
+          <div class="pred-row">
+            <div><small>network</small><b id="predSteer">–</b></div>
+            <div><small>expert</small><b id="expertSteer">–</b></div>
+            <div><small>offset</small><b id="laneOffset">–</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="drive">1. Drive</button>
+        <button class="tab" data-tab="train">2. Train</button>
+        <button class="tab" data-tab="auto">3. Autonomous</button>
+        <button class="tab" data-tab="learn">How it works</button>
+      </nav>
+
+      <!-- DRIVE -->
+      <div class="tabpane active" id="tab-drive">
+        <p class="lead">Drive some laps with recording on. Every 0.1 s it saves the center, left and right camera images along with your steering angle.</p>
+        <div class="keys">Arrow keys or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to drive, <kbd>R</kbd> to toggle recording, <kbd>Space</kbd> to put the car back on the road</div>
+        <div class="btn-row">
+          <button id="btnManual" class="btn">Drive manually</button>
+          <button id="btnRecord" class="btn rec-btn">Record</button>
+        </div>
+        <div class="card inset">
+          <div class="card-title">Expert laps</div>
+          <p class="small">If you don't want to drive yourself, a scripted pure pursuit driver can do it. It gets random steering kicks along the way so the data also has some recoveries from the edge.</p>
+          <div class="form-row">
+            <label>Laps <select id="expertLaps"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+            <label>Sim speed <select id="expertSpeed"><option value="1">1x</option><option value="2">2x</option><option value="4" selected>4x</option><option value="8">8x</option></select></label>
+          </div>
+          <button id="btnExpert" class="btn primary wide">Auto-record expert laps</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat"><b id="statFrames">0</b><small>moments</small></div>
+          <div class="stat"><b id="statImages">0</b><small>images (3 cams)</small></div>
+          <div class="stat"><b id="statMem">0 MB</b><small>memory</small></div>
+        </div>
+        <div class="card-title">Steering histogram</div>
+        <canvas id="hist" width="420" height="90"></canvas>
+        <div class="btn-row">
+          <button id="btnCSV" class="btn ghost">Export CSV</button>
+          <button id="btnClear" class="btn ghost danger">Clear</button>
+        </div>
+      </div>
+
+      <!-- TRAIN -->
+      <div class="tabpane" id="tab-train">
+        <p class="lead">The network from Nvidia's 2016 paper: normalization, 5 conv layers, 3 dense layers and one output. MSE loss, Adam, dropout. Training runs in the browser with TensorFlow.js.</p>
+        <div class="form-grid">
+          <label>Epochs <input id="epochs" type="number" min="1" max="50" value="5" /></label>
+          <label>Batch <input id="batch" type="number" min="8" max="256" value="64" /></label>
+          <label>Learning rate <input id="lr" type="number" step="0.0001" min="0.00001" value="0.001" /></label>
+          <label>Validation <span><input id="valSplit" type="range" min="10" max="20" value="20" /> <b id="valSplitText">20%</b></span></label>
+          <label>Network <select id="arch"><option value="full" selected>Nvidia (252k weights)</option><option value="lite">Lite, half width (64k)</option></select></label>
+          <label>Start from <select id="initFrom"><option value="scratch" selected>random weights</option><option value="pretrained">pretrained weights</option></select></label>
+          <label class="check"><input id="useSide" type="checkbox" checked /> side cameras (+/-0.2)</label>
+          <label class="check"><input id="useFlip" type="checkbox" checked /> random flips</label>
+        </div>
+        <div class="btn-row">
+          <button id="btnTrain" class="btn primary">Train</button>
+          <button id="btnStop" class="btn ghost" disabled>Stop</button>
+        </div>
+        <div class="progress"><div id="trainBar"></div></div>
+        <div id="trainStatus" class="small muted">Record some data first, then train.</div>
+        <canvas id="lossChart" width="440" height="220"></canvas>
+        <div class="small muted">If training loss keeps going down while validation loss goes up, it's overfitting. Training loss is usually higher here because it includes side camera images and dropout.</div>
+        <details class="arch">
+          <summary>Layers</summary>
+          <table id="archTable"><thead><tr><th>layer</th><th>output</th><th>weights</th></tr></thead><tbody></tbody></table>
+        </details>
+        <div class="btn-row">
+          <button id="btnSaveModel" class="btn ghost" disabled>Download model</button>
+        </div>
+      </div>
+
+      <!-- AUTONOMOUS -->
+      <div class="tabpane" id="tab-auto">
+        <p class="lead">The network steers from the center camera 15 times a second and a PI controller handles speed. If the car leaves the road it gets reset to the center line and that counts as a takeover (6 s penalty in the autonomy score).</p>
+        <div class="form-grid">
+          <label>Model <select id="modelChoice"><option value="pretrained">Pretrained</option><option value="user" disabled>Your trained model</option></select></label>
+          <label>Sim speed <select id="autoSpeed"><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select></label>
+          <label>Max speed <span><input id="maxSpeed" type="range" min="8" max="18" value="13" /> <b id="maxSpeedText">47 km/h</b></span></label>
+        </div>
+        <div class="btn-row">
+          <button id="btnAuto" class="btn primary">Start</button>
+          <button id="btnAutoStop" class="btn ghost">Stop</button>
+        </div>
+        <div class="autonomy">
+          <div class="gauge"><b id="autonomyPct">100%</b><small>autonomy</small></div>
+          <div class="formula">autonomy = (1 - <b id="fTake">0</b> takeovers * 6 / <b id="fTime">0</b> s) * 100</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat"><b id="aLaps">0</b><small>laps</small></div>
+          <div class="stat"><b id="aTake">0</b><small>takeovers</small></div>
+          <div class="stat"><b id="aBest">–</b><small>best lap (s)</small></div>
+        </div>
+        <table class="laps"><thead><tr><th>lap</th><th>time</th><th>takeovers</th><th>autonomy</th><th>max offset</th></tr></thead><tbody id="lapTable"></tbody></table>
+        <p class="small muted">Pressing a steering key here also counts as a takeover. If your model keeps failing at one spot, record more driving there and retrain.</p>
+      </div>
+
+      <!-- LEARN -->
+      <div class="tabpane" id="tab-learn">
+        <div class="explain">
+          <h3>Pictures are numbers</h3>
+          <p>Each pixel is three numbers (red, green, blue). After cropping the sky and the hood and resizing to 66x200, the network gets 39,600 numbers. That's all it sees.</p>
+
+          <h3>Labels</h3>
+          <p>Every saved image is paired with the steering angle at that moment, same idea as Udacity's <code>driving_log.csv</code>. Steering goes from -1 (full left) to +1 (full right). The toy example below uses -15 / 0 / +15 to keep the numbers readable.</p>
+
+          <h3>Edge filter</h3>
+          <p>A conv layer slides a small filter over the image. With the row <code>1 1 8 8 8</code> and the filter <code>(-1, +1)</code> you get right minus left at each spot:</p>
+          <div class="edge-demo">
+            <label>row <input id="edgeRow" value="1 1 8 8 8" /></label>
+            <label>filter <input id="edgeFilter" value="-1 1" /></label>
+            <div id="edgeOut" class="cells"></div>
+          </div>
+          <p class="small">It only responds where the brightness jumps, which is what a lane line looks like. Here is the same filter on the camera image:</p>
+          <canvas id="edgeCam" width="200" height="66"></canvas>
+
+          <h3>Gradient descent by hand</h3>
+          <p>A 3x3 picture with road (8) on the left and grass (1, 2) on the right. The toy model uses one number, x = right column - left column = 4 - 24 = -20, and guesses w * x. The road bends left so the target is -15.</p>
+          <div class="toy">
+            <div class="grid3" id="grid3"></div>
+            <div class="toy-controls">
+              <label>start w <input id="gdW" type="number" value="-1" step="0.1" /></label>
+              <label>learning rate <input id="gdLr" type="number" value="0.001" step="0.0005" /></label>
+              <div class="btn-row"><button id="gdStep" class="btn primary">Step</button><button id="gdReset" class="btn ghost">Reset</button></div>
+            </div>
+          </div>
+          <table class="gd"><thead><tr><th>round</th><th>w</th><th>guess</th><th>miss</th><th>loss</th><th>slope</th></tr></thead><tbody id="gdTable"></tbody></table>
+          <p class="small">slope = 2 * miss * x, new w = w - lr * slope. After three rounds the guess is -14.72. The real network does the same thing with about 250k weights and thousands of images.</p>
+          <canvas id="gdChart" width="420" height="140"></canvas>
+
+          <h3>Autonomy score</h3>
+          <p>From the Nvidia paper: autonomy = (1 - takeovers * 6 / seconds) * 100.</p>
+          <div class="calc">
+            <label>takeovers <input id="calcT" type="number" value="2" min="0" /></label>
+            <label>lap time (s) <input id="calcS" type="number" value="120" min="1" /></label>
+            <div>autonomy = <b id="calcOut">90%</b></div>
+          </div>
+
+          <p class="small muted">Based on Hari's guide (<a href="https://x.com/harixganesh" target="_blank" rel="noopener">@harixganesh</a>), the Nvidia paper <a href="https://arxiv.org/abs/1604.07316" target="_blank" rel="noopener">End to End Learning for Self-Driving Cars</a>, Udacity's behavioral cloning project and <a href="https://github.com/naokishibuya/car-behavioral-cloning" target="_blank" rel="noopener">naokishibuya/car-behavioral-cloning</a>.</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+  <footer class="foot">
+    Runs entirely in the browser with TensorFlow.js. <a href="https://github.com/" id="repoLink" target="_blank" rel="noopener">Source</a>
+  </footer>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

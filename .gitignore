@@ -1,0 +1,14 @@
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+# Python training artefacts / simulator recordings
+python/data/
+python/IMG/
+python/*.keras
+python/*.h5
+python/run*/
+*.log
