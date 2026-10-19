@@ -4,7 +4,7 @@ A small behavioral cloning project. You drive a car around a track, it records w
 
 There are two parts. `web/` is a simulator that runs in the browser, with training done in TensorFlow.js. `python/` is Keras code for the Udacity simulator, which is the original setup this kind of project is usually built on.
 
-Live demo: LIVE_DEMO_URL
+Live demo: https://hrutishaa.github.io/self-driving-car-sim/
 
 The repo comes with a pretrained model, so you can hit "Run autonomous" right away. Adding `?auto=1` to the URL starts it on load.
 
@@ -82,7 +82,7 @@ The workflow in `.github/workflows/pages.yml` publishes `web/` to GitHub Pages o
    ```
 3. In the repo, go to Settings > Pages and set Source to "GitHub Actions". If the first workflow run failed because Pages wasn't on yet, re-run it from the Actions tab.
 
-After a minute or so the site is up at `https://<username>.github.io/self-driving-car-sim/`. The URL also shows in the Actions run and under Settings > Pages. Then replace LIVE_DEMO_URL near the top of this README with it. All paths in the app are relative, so it works fine under the repo sub-path.
+After a minute or so the site is up at `https://<username>.github.io/self-driving-car-sim/`. The URL also shows in the Actions run and under Settings > Pages. Then replace https://hrutishaa.github.io/self-driving-car-sim/ near the top of this README with it. All paths in the app are relative, so it works fine under the repo sub-path.
 
 ## Limitations
 
