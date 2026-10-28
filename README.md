@@ -1,5 +1,7 @@
 # Self Driving Car Simulator
 
+[![Python tests](https://github.com/hrutishaa/self-driving-car-sim/actions/workflows/python.yml/badge.svg)](https://github.com/hrutishaa/self-driving-car-sim/actions/workflows/python.yml)
+
 A small behavioral cloning project. You drive a car around a track, it records what the dashcam sees and how you steer, and a CNN learns to steer from the camera image alone. Then you let it drive.
 
 There are two parts. `web/` is a simulator that runs in the browser, with training done in TensorFlow.js. `python/` is Keras code for the Udacity simulator, which is the original setup this kind of project is usually built on.
@@ -60,6 +62,8 @@ python test_smoke.py
 ```
 
 `test_smoke.py` doesn't need the simulator. It trains for two epochs on fake images and sends a few messages to `drive.py` the same way the simulator would.
+
+`test_utils.py` has fast unit tests for the preprocessing and augmentation (crop and resize shape, flip negating the steering, side camera correction, finding images recorded with another machine's absolute paths). Run them with `pip install pytest && pytest test_utils.py`. Both test files run on every push in `.github/workflows/python.yml`.
 
 With the real simulator, record a few laps in training mode (include some recoveries from the edge), put `driving_log.csv` and the `IMG` folder in `python/data`, then:
 
